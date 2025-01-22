@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rack Cable Calculator</title>
+    <style>
+        body {
+          font-family: Arial, sans-serif;
+          background-color: #1e1e1e;
+          color: #f0f0f0;
+        }
+        .input-section {
+            margin-bottom: 20px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        canvas {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            display: block;
+        }
+        a {
+          color: #4caf50;
+          text-decoration: none;
+        }
+    
+        a:hover {
+          text-decoration: underline;
+        }
+    
+        h1, h2, h3 {
+          color: #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <h1>Rack Cable Calculator</h1>
+
+    <div class="input-section">
+        <h2>Patch Panels</h2>
+        <label for="patchPanels">Number of Patch Panels:</label>
+        <input type="number" id="patchPanels" min="1" value="4">
+        <button onclick="addPatchPanels()">Set</button>
+        <div id="patchPanelDetails"></div>
+    </div>
+
+    <div class="input-section">
+        <h2>Network Switches</h2>
+        <label for="networkSwitches">Number of Network Switches:</label>
+        <input type="number" id="networkSwitches" min="1" value="4">
+        <button onclick="addNetworkSwitches()">Set</button>
+        <div id="switchDetails"></div>
+    </div>
+
+    <button onclick="calculate()">Calculate</button>
+
+    <div class="result" id="results"></div>
+
+    <canvas id="visualization" width="400" height="1000"></canvas>
+
+    <script>
+        function addPatchPanels() {
+            const panelCount = document.getElementById('patchPanels').value;
+            const container = document.getElementById('patchPanelDetails');
+            container.innerHTML = '';
+
+            for (let i = 1; i <= panelCount; i++) {
+                container.innerHTML += `
+                    <div>
+                        <h3>Patch Panel ${i}</h3>
+                        <label>Number of Ports Populated:</label>
+                        <input type="number" class="patch-panel-ports" min="1" value="12">
+                        <label>Rack Unit:</label>
+                        <input type="number" class="patch-panel-ru" min="1" value="1">
+                    </div>
+                `;
+            }
+        }
+
+        function addNetworkSwitches() {
+            const switchCount = document.getElementById('networkSwitches').value;
+            const container = document.getElementById('switchDetails');
+            container.innerHTML = '';
+
+            for (let i = 1; i <= switchCount; i++) {
+                container.innerHTML += `
+                    <div>
+                        <h3>Network Switch ${i}</h3>
+                        <label>Number of Ports:</label>
+                        <input type="number" class="switch-ports" min="1" value="48">
+                        <label>Rack Unit:</label>
+                        <input type="number" class="switch-ru" min="1" value="1">
+                    </div>
+                `;
+            }
+        }
+
+        function calculate() {
+    const colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'black', 'cyan', 'magenta', 'yellow', 'lime', 'teal', 'indigo', 'violet', 'fuchsia', 'khaki', 'maroon', 'navy', 'olive', 'silver', 'tan'];
+
+    const patchPanels = Array.from(document.querySelectorAll('.patch-panel-ru')).map((ru, index) => {
+        return {
+            id: `Panel ${index + 1}`,
+            num: index + 1,
+            ru: parseInt(ru.value, 10),
+            ports: parseInt(document.querySelectorAll('.patch-panel-ports')[index].value, 10)
+        };
+    });
+
+    const switches = Array.from(document.querySelectorAll('.switch-ru')).map((ru, index) => {
+        return {
+            id: `Switch ${index + 1}`,
+            num: index + 1,
+            color: colors[index],
+            ru: parseInt(ru.value, 10),
+            ports: parseInt(document.querySelectorAll('.switch-ports')[index].value, 10)
+        };
+    });
+
+    let totalCableLength = 0;
+    let totalCables = 0;
+    let cableAssignments = [];
+    let cableGroups = { "1m": 0, "1.5m": 0, "2m": 0, "2.5m": 0, "3m": 0 };
+
+    // Sort switches and patch panels in descending order of RU (higher RU comes first)
+    switches.sort((a, b) => b.ru - a.ru);
+    patchPanels.sort((a, b) => b.ru - a.ru);
+
+    // Assign cables
+    for (let patchPanel of patchPanels) {
+        for (let switchObj of switches) {
+            if (patchPanel.ports > 0 && switchObj.ports > 0) {
+                const cablesToConnect = Math.min(switchObj.ports, patchPanel.ports);
+                const cableLength = (45 * Math.abs(switchObj.ru - patchPanel.ru)) + 600;
+
+                totalCableLength += cableLength * cablesToConnect;
+                totalCables += cablesToConnect;
+
+                // Group cables based on their length
+                const lengthInMeters = cableLength / 1000;
+                if (lengthInMeters <= 1) {
+                    cableGroups["1m"] += cablesToConnect;
+                } else if (lengthInMeters <= 1.5) {
+                    cableGroups["1.5m"] += cablesToConnect;
+                } else if (lengthInMeters <= 2) {
+                    cableGroups["2m"] += cablesToConnect;
+                } else if (lengthInMeters <= 2.5) {
+                    cableGroups["2.5m"] += cablesToConnect;
+                } else {
+                    cableGroups["3m"] += cablesToConnect;
+                }
+
+                cableAssignments.push({
+                    switchId: switchObj.id,
+                    patchPanelId: patchPanel.id,
+                    cables: cablesToConnect,
+                    cableLength: lengthInMeters
+                });
+
+                // Deduct connected ports
+                patchPanel.ports -= cablesToConnect;
+                switchObj.ports -= cablesToConnect;
+
+                // Stop assigning to this patch panel if no ports are left
+                if (patchPanel.ports === 0) break;
+            }
+        }
+    }
+
+    const avgCableLength = totalCables > 0 ? (totalCableLength / totalCables).toFixed(2) : 0;
+
+    let assignmentDetails = cableAssignments.map(a => {
+        return `<p>${a.cables} cables assigned from ${a.patchPanelId} to ${a.switchId}, each ${a.cableLength.toFixed(2)} m long</p>`;
+    }).join('');
+
+    // Generate grouped results
+    const groupedDetails = Object.entries(cableGroups)
+        .map(([group, count]) => `<p>${count} cables in the ${group} group</p>`)
+        .join('');
+
+    document.getElementById('results').innerHTML = `
+        <h2>Results</h2>
+        <p>Total Cables Required: ${totalCables}</p>
+        <p>Average Cable Length: ${avgCableLength} mm</p>
+        <h3>Cable Assignments</h3>
+        ${assignmentDetails}
+        <h3>Cable Length Groups</h3>
+        ${groupedDetails}
+    `;
+
+    visualize(cableAssignments, patchPanels, switches);
+}
+
+
+        function visualize(cableAssignments, patchPanels, switches) {
+          const canvas = document.getElementById('visualization');
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+          const xStart = 100;
+          const spacing = 30;
+          const maxRU = 42; // The highest RU in the rack
+      
+          // Calculate the highest RU to determine the canvas height
+          const highestRU = Math.max(
+              ...patchPanels.map(panel => panel.ru),
+              ...switches.map(sw => sw.ru)
+          );
+      
+          // Adjust canvas height based on the highest RU
+          canvas.height = (maxRU + 1) * spacing;
+      
+          // Draw patch panels
+          patchPanels.forEach(panel => {
+              const y = (maxRU - panel.ru) * spacing;
+              ctx.fillStyle = 'grey';
+              ctx.fillRect(xStart + 50, y, 100, 30); // Patch panel rectangles
+              ctx.fillStyle = 'black';
+              ctx.font = "16px Arial";
+              ctx.fillText(panel.id, xStart + 75, y + 20);
+              ctx.fillStyle = 'green';
+              ctx.font = "16px Arial";
+              ctx.fillText(`RU${panel.ru}`, xStart - 10, y + 20);
+          });
+      
+          // Draw switches
+          switches.forEach(sw => {
+              const y = (maxRU - sw.ru) * spacing;
+              ctx.fillStyle = sw.color;
+              ctx.fillRect(xStart + 50, y, 100, 30); // Switch rectangles
+              ctx.fillStyle = 'black';
+              ctx.font = "16px Arial";
+              ctx.fillText(sw.id, xStart + 75, y + 20);
+              ctx.fillStyle = 'green';
+              ctx.font = "16px Arial";
+              ctx.fillText(`RU${sw.ru}`, xStart - 10, y + 20);
+          });
+      
+          // Draw connections
+          cableAssignments.forEach(assign => {
+              const panel = patchPanels.find(p => p.id === assign.patchPanelId);
+              const sw = switches.find(s => s.id === assign.switchId);
+      
+              if (panel && sw) {
+                const yPanel = (maxRU - panel.ru) * spacing;
+                const ySwitch = (maxRU - sw.ru) * spacing;
+      
+                  ctx.beginPath();
+                  ctx.moveTo(xStart + 150, yPanel + 15); // Start at patch panel rectangle center
+                  ctx.lineTo(xStart + 160 + ((panel.num*4)+(sw.num*4)), yPanel + 15);
+                  ctx.strokeStyle = sw.color;
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+
+                  ctx.beginPath();
+                  ctx.moveTo(xStart + 150, ySwitch + 15);
+                  ctx.lineTo(xStart + 160  + ((panel.num*4)+(sw.num*4)), ySwitch + 15);
+                  ctx.strokeStyle = sw.color;
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+                  
+                  ctx.beginPath();
+                  ctx.moveTo(xStart + 160 + ((panel.num*4)+(sw.num*4)), yPanel + 15); // Start at patch panel rectangle center
+                  ctx.lineTo(xStart + 160 + ((panel.num*4)+(sw.num*4)), ySwitch + 15); // End at switch rectangle center
+                  ctx.strokeStyle = sw.color;
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+
+
+      
+                  const midY = (yPanel + ySwitch) / 2;
+                  ctx.fillStyle = sw.color;
+                  ctx.fillText(`${assign.cableLength} M`, xStart + 230, midY);
+              }
+          });
+      }
+      
+    </script>
+</body>
+</html>
